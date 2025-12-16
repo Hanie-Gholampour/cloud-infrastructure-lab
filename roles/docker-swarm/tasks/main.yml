@@ -1,0 +1,39 @@
+---
+- name: install Docker SDK for python
+  ansible.builtin.apt:
+    pkg:
+      - python3-docker 
+      - python3-jsondiff
+  become: true
+
+- name: Force leave any existing swarm
+  docker_swarm:
+    state: absent
+    force: true
+  when: swarm_force_reinit
+  ignore_errors: true
+
+- name: Init swarm 
+  docker_swarm:
+    state: present
+    advertise_addr: "{{ workload_IP }}"
+  register: swarm_init
+  when: inventory_hostname == groups['swarm_managers'][0] # only the first manager
+
+- name: Join swarm as manager
+  docker_swarm:
+    state: join
+    remote_addrs: "{{ hostvars[groups['swarm_managers'][0]]['workload_IP'] }}"
+    join_token: "{{ hostvars[groups['swarm_managers'][0]]['swarm_init']['swarm_facts']['JoinTokens']['Manager'] }}"
+    advertise_addr: "{{ workload_IP }}"
+  when: 
+    - inventory_hostname != groups['swarm_managers'][0]
+    - inventory_hostname in groups['swarm_managers']
+
+- name: Join swarm as worker
+  docker_swarm:
+    state: join
+    remote_addrs: "{{ hostvars[groups['swarm_managers'][0]]['workload_IP'] }}"
+    join_token: "{{ hostvars[groups['swarm_managers'][0]]['swarm_init']['swarm_facts']['JoinTokens']['Worker'] }}"
+    advertise_addr: "{{ workload_IP }}"
+  when: inventory_hostname in groups['swarm_workers']

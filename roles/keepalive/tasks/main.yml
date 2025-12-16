@@ -1,0 +1,24 @@
+- block:
+  - name: Install keepalived
+    apt:
+      name: keepalived
+      state: present
+    become: true
+
+  - name: Deploy keepalived configuration
+    template:
+      src: keepalived.conf
+      dest: /etc/keepalived/keepalived.conf
+      owner: root
+      group: root
+      mode: '0644'
+    become: true
+    notify: Restart keepalived
+
+  - name: Ensure keepalived is enabled and running
+    service:
+      name: keepalived
+      enabled: true
+      state: started
+    become: true
+  when: "'swarm_managers' in group_names"

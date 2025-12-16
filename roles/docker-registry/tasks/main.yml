@@ -1,0 +1,66 @@
+---
+- name: Ensure certs directory exists
+  ansible.builtin.file:
+    path: "{{ data_dir }}/certs/registry"
+    state: directory
+    mode: '0755'
+
+- name: Create self-signed key for registry
+  community.crypto.openssl_privatekey:
+    path: "{{ data_dir }}/certs/registry/registry.key"
+    type: RSA
+    size: 2048
+    mode: '0600'
+
+- name: Create certificate signing request (CSR) for self-signed certificate
+  community.crypto.openssl_csr_pipe:
+    privatekey_path: "{{ data_dir }}/certs/registry/registry.key"
+    common_name: 'registry.{{ domain_name }}'
+    organization_name: VCC
+    subject_alt_name:
+      - "DNS:registry.{{ domain_name }}"
+  register: csr
+
+- name: Create self-signed certificate from CSR
+  community.crypto.x509_certificate:
+    path: "{{ data_dir }}/certs/registry/registry.crt"
+    csr_content: "{{ csr.csr }}"
+    privatekey_path: "{{ data_dir }}/certs/registry/registry.key"
+    provider: selfsigned
+
+- name: Delete /data/registry
+  ansible.builtin.file:
+    path: /data/registry
+    state: absent
+  when: registry_nuke_data_directory
+  failed_when: false
+
+- name: Create /data/registry/config
+  ansible.builtin.file:
+    path: /data/registry/config
+    state: directory
+
+- name: Create /data/registry/data
+  ansible.builtin.file:
+    path: /data/registry/data
+    state: directory
+
+- name: Copy docker registry compose file
+  ansible.builtin.template:
+    src: docker-registry.yml
+    dest: /opt/docker-registry.yml
+
+- name: Remove registry stack
+  community.docker.docker_stack:
+    name: registry
+    state: absent
+  when: registry_nuke_data_directory
+
+- name: Deploy a docker registry
+  community.docker.docker_stack:
+    name: registry
+    detach: false
+    prune: true
+    compose:
+      - /opt/docker-registry.yml
+    state: present

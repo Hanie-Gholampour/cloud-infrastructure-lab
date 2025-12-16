@@ -1,0 +1,9 @@
+---
+swarm_data_directories:
+swarm_nuke_data_directories: true # you WILL lose your data
+
+swarm_compose_file_names:
+#  - docker-compose.yml
+swarm_recreate: true
+
+full: true

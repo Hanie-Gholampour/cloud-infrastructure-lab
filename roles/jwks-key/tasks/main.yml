@@ -1,0 +1,4 @@
+---
+# TODO[VCC-004]: Generate a jwks key for OIDC (RSA 4096 bits)
+# (see jwks_key_path variable in group_vars/all.yml)
+# The generated key will be automatically injected in Authelia config using the entrypoint script of the Authelia container

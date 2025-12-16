@@ -1,0 +1,23 @@
+controlnode.vcc.local ansible_connection=local
+
+[controlnode]
+controlnode.vcc.local
+
+[storage]
+controlnode.vcc.local
+
+[targets]
+node[1:2].vcc.local
+
+[swarm_managers]
+node1.vcc.local
+#controlnode.vcc.local
+
+[swarm_workers]
+node2.vcc.local
+
+[all:vars]
+ansible_python_interpreter=/usr/bin/python3
+
+[targets:vars]
+ansible_user=vagrant

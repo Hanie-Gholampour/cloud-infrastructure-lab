@@ -1,0 +1,64 @@
+---
+# main playbook
+- hosts: localhost
+  gather_facts: false
+  tasks:
+    - block:
+      - debug:
+          msg: "Building dynamic host list..."
+      - add_host:
+          name: "{{ item }}"
+          groups: active_targets
+        loop: "{{ groups['targets'] }}"
+      - when: include_controlnode_in_targets
+        add_host:
+          name: "{{ groups['storage'][0] }}"
+          groups: active_targets
+      - debug:
+          msg: "Active targets: {{ groups['active_targets'] }}"
+      tags: ['images', 'deploy', 'services', 'registry']
+
+- hosts: storage
+  gather_facts: no
+  become: true
+  roles:
+    - network_facts
+    - nfs_server
+
+- hosts: targets
+  gather_facts: no
+  become: true
+  roles:
+    - network_facts
+    - datadir
+    - nfs_client
+
+- hosts: active_targets
+  gather_facts: no
+  become: true
+  roles:
+    - network_facts
+    - keepalive
+    - docker
+    - docker-swarm
+    - docker-registry-node-config
+
+# docker compose
+# - hosts: targets[0]
+#   gather_facts: no
+#   become: true
+#   roles:
+#     - { role: docker-images, tags: ['images', 'deploy'] }
+#     - { role: compose-services, tags: ['services', 'deploy'] }
+
+# docker swarm
+- hosts: targets[0]
+  gather_facts: no
+  become: true
+  roles:
+    - certs
+    - jwks-key
+    - { role: network_facts, tags: ['services', 'deploy'] }
+    - { role: docker-registry, tags: ['registry'] }
+    - { role: docker-images, tags: ['images', 'deploy'] }
+    - { role: swarm-services, tags: ['services', 'deploy'] }

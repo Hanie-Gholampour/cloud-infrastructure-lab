@@ -1,0 +1,48 @@
+services:
+  traefik:
+    image: traefik:v2.11
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.role == manager
+    command:
+      # enable web UI (disabled in production mode)
+      - "--api.insecure={{ 'false' if production_mode else 'true' }}"
+      # Enable the Docker Swarm provider (instead of Docker provider)
+      - "--providers.docker=true"
+      - "--providers.docker.swarmMode=true"
+      - "--providers.docker.exposedByDefault=false"
+      - "--providers.docker.network=net"
+      # dynamic config (for TLS certificates)
+      - "--providers.file.filename=/etc/traefik/dynamic.yml"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # redirect HTTP to HTTPS
+      # TODO[VCC-015]: Enable HTTP to HTTPS redirection
+      # logging configuration
+      - "--log.level=INFO"
+      - "--log.format=console"
+      - "--accesslog=true"
+      - "--accesslog.format=common"
+    ports:
+      - target: 443
+        published: 443
+        mode: host      
+      - target: 80
+        published: 80
+        mode: host      
+{% if not production_mode %}
+      - target: 8080
+        published: 8080
+        mode: host
+{% endif %}
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "{{ data_dir }}/certs:/certs:ro"
+      - "{{ data_dir }}/configs/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro"
+    networks:
+      net:
+
+networks:
+  net:

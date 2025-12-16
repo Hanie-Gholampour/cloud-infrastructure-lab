@@ -1,0 +1,30 @@
+# networks:
+#   host:
+#     external: true # host network already exists and we don't need to create it
+networks:
+  registry_network:
+    driver: overlay
+
+services:
+  docker_registry:
+    image: ghcr.io/distribution/distribution:3.0.0
+    networks:
+      - registry_network
+    ports:
+      - "5000:5000"
+    # networks:
+    #   host: # use the network from the host
+    # deploy:
+    #   mode: global
+    deploy:
+      mode: replicated
+      replicas: 1
+    environment:
+      REGISTRY_STORAGE_FILESYSTEM_ROOTDIRECTORY: /var/lib/registry
+      REGISTRY_HTTP_ADDR: ":5000"
+      REGISTRY_HTTP_TLS_CERTIFICATE: "/certs/registry.crt"
+      REGISTRY_HTTP_TLS_KEY: "/certs/registry.key"
+      OTEL_TRACES_EXPORTER: "none"
+    volumes:
+      - /data/registry/data:/var/lib/registry
+      - /data/certs/registry/:/certs/:ro

@@ -1,0 +1,47 @@
+---
+# tasks file for roles/network_facts
+- name: Filter network facts
+  # setup:
+  #   filter: all_ipv4_addresses
+  setup:
+    gather_subset:
+      - network
+
+- name: Set workload network IP
+  set_fact:
+    workload_IP: "{{ ansible_all_ipv4_addresses | ansible.utils.ipaddr(workload_network) | first }}"
+
+- name: Set storage network IP
+  set_fact:
+    storage_IP: "{{ ansible_all_ipv4_addresses | ansible.utils.ipaddr(storage_network) | first }}"
+
+- name: Determine workload interface
+  set_fact:
+    workload_INT: "{{ item }}"
+  loop: "{{ ansible_interfaces }}"
+  when: ansible_facts[item] is defined
+        and ansible_facts[item].ipv4 is defined
+        and ansible_facts[item].ipv4.address == workload_IP
+
+- name: Determine storage interface
+  set_fact:
+    storage_INT: "{{ item }}"
+  loop: "{{ ansible_interfaces }}"
+  when: ansible_facts[item] is defined
+        and ansible_facts[item].ipv4 is defined
+        and ansible_facts[item].ipv4.address == storage_IP
+
+- name: Verify workload IP is defined
+  assert:
+    that:
+      - workload_IP is defined
+      - workload_INT is defined
+    fail_msg: "No IP in {{ workload_network }} or interface not found"
+    success_msg: "Selected IP: {{ workload_IP }}, Interface: {{ workload_INT }}"
+- name: Verify storage IP is defined
+  assert:
+    that:
+      - storage_IP is defined
+      - storage_INT is defined
+    fail_msg: "No IP in {{ storage_network }} or interface not found"
+    success_msg: "Selected IP: {{ storage_IP }}, Interface: {{ storage_INT }}"

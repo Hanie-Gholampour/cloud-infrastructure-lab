@@ -1,0 +1,20 @@
+---
+# TODO[VCC-002]: Implement tasks for NFS client setup. Make sure to use the storage network for NFS mount
+
+# - name: "Create NFS share directory"
+
+# - name: Install NFS client
+
+# - name: Mount NFS share
+# use storage network for NFS mount
+
+## check mount
+- block:
+  - name: Get mount information
+    command: cat /proc/mounts
+    register: mounts_out
+  - assert:
+      that:
+        - mounts_out.stdout is search('storage\\.' ~ domain_name | regex_escape ~ ':/data.*clientaddr=' ~ storage_IP | regex_escape ~ '.*')
+      fail_msg: "NFS share not mounted correctly"
+  when: enable_asserts

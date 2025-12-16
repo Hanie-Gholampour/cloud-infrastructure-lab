@@ -1,0 +1,168 @@
+// logs collection
+
+// Discover Docker containers and extract metadata
+discovery.docker "discovery_docker" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// Define a relabeling rule to create a service name from the container name
+discovery.relabel "logs_integrations_docker" {
+  targets = []
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "^/(.+?\\.[0-9]+)\\..*$"
+    target_label  = "container_name"
+    replacement   = "$1"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_swarm_service_name"]
+    target_label  = "service_name"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_stack_namespace"]
+    target_label  = "stack_name"
+  }
+
+  rule {
+    target_label = "host"
+    replacement  = env("NODE")
+  }
+}
+
+// Configure a loki.source.docker component to collect logs from Docker containers
+loki.source.docker "logs_docker_containers" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.docker.discovery_docker.targets
+  relabel_rules = discovery.relabel.logs_integrations_docker.rules
+  forward_to = [loki.write.log_service.receiver]
+}
+
+loki.write "log_service" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+// metrics collection
+
+// cadvisor (https://grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.exporter.cadvisor/)
+prometheus.exporter.unix "host" {}
+
+prometheus.exporter.cadvisor "cadvisor_metrics" {
+  docker_host = "unix:///var/run/docker.sock"
+}
+
+// node exporter (https://grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.exporter.unix/)
+prometheus.scrape "host_metrics_scraper" {
+  targets = prometheus.exporter.unix.host.targets 
+  job_name = "node_exporter"
+
+  scrape_interval = "{{ alloy_scrape_interval}}"
+  scrape_timeout  = "{{ alloy_scrape_timeout}}"
+
+  forward_to = [prometheus.relabel.metrics.receiver]
+}
+
+prometheus.scrape "cadvisor_scraper" {
+  targets    = prometheus.exporter.cadvisor.cadvisor_metrics.targets
+  job_name   = "cadvisor"
+  
+  scrape_interval = "{{ alloy_scrape_interval}}"
+  scrape_timeout  = "{{ alloy_scrape_timeout}}"
+  
+  forward_to = [prometheus.relabel.metrics.receiver]
+}
+
+// pgsql (https://grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.exporter.postgres/)
+// TODO[VCC-019]: Configure Postgres exporter
+
+// redis (https://grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.exporter.redis/)
+// TODO[VCC-021]: Configure Redis exporter
+
+// traefik
+
+discovery.relabel "traefik_targets" {
+  targets = discovery.docker.discovery_docker.targets
+
+  // keep only traefik service
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_swarm_service_name"]
+    regex         = "vcc_traefik"
+    action        = "keep"
+  }
+
+  // keep only https port
+  rule {
+    source_labels = ["__meta_docker_port_private"]
+    regex         = "443"
+    action        = "keep"
+  }
+
+  // remove ipv6 addresses
+  rule {
+    source_labels = ["__meta_docker_port_public_ip"]
+    regex         = "::"
+    action        = "drop"
+  }
+
+  // set __address__ to ip:9100 for traefik metrics endpoint
+  rule {
+    source_labels = ["__meta_docker_network_ip"]
+    target_label  = "__address__"
+    replacement   = "$1:9100"
+    action        = "replace"
+  }
+
+  rule {
+    target_label  = "__scheme__"
+    replacement   = "http"
+    action        = "replace"
+  }
+}
+
+prometheus.scrape "traefik_metrics" {
+  // relabel is required to select only the traefik container and set correct __address__
+  targets = discovery.relabel.traefik_targets.output
+  job_name = "traefik_exporter"
+
+  scrape_interval = "{{ alloy_scrape_interval}}"
+  scrape_timeout  = "{{ alloy_scrape_timeout}}"
+
+  forward_to = [prometheus.relabel.traefik_instance.receiver]
+}
+
+prometheus.relabel "traefik_instance" {
+  // traefik is in global swarm mode, so we can use NODE as instance label
+  rule {
+    target_label = "instance"
+    replacement  = env("NODE")
+    action       = "replace"
+  }
+
+  forward_to = [prometheus.relabel.metrics.receiver]
+}
+
+// authelia exporter
+// TODO[VCC-022]: Configure Authelia exporter
+
+// forgejo exporter
+// TODO[VCC-023]: Configure Forgejo exporter
+
+// Define a relabeling rule to add the node name as a label
+prometheus.relabel "metrics" {
+  forward_to = [prometheus.remote_write.metrics_service.receiver]
+
+    rule {
+      target_label = "host"
+      replacement  = env("NODE")
+    }
+}
+
+prometheus.remote_write "metrics_service" {
+    endpoint {
+      url = "http://prometheus:9090/api/v1/write"
+    }
+}

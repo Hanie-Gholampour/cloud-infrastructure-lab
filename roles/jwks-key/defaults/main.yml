@@ -1,0 +1,2 @@
+---
+jwks_key_path: "{{ data_dir }}/jwks/"

@@ -1,0 +1,62 @@
+server:
+  address: "tcp://0.0.0.0:{{ authelia_port }}"
+log:
+  level: info
+
+# TODO[VCC-017]: Update Authelia configuration (see comments below)
+
+authentication_backend:
+  password_reset:
+    disable: true
+  file:
+    path: /config/users.yml
+
+session:
+  secret: "{{ lookup('password', '/dev/null', length=64) }}"
+  cookies:
+    - name: authelia_session
+      domain: {{ domain_name }}
+      authelia_url: https://auth.{{ domain_name }}
+  redis:
+    host: redis
+    port: 6379
+    database_index: 0
+     
+access_control:
+  default_policy: deny
+  rules:
+    - domain: auth.{{ domain_name }}
+      policy: one_factor
+
+identity_providers:
+  oidc:
+    jwks:
+      - algorithm: RS256
+        # entrypoint will substitute the key content here taken from the secret file (/run/secrets/jwks_key)
+        # DO NOT EDIT THIS VALUE HERE
+        key: |
+          JWKS_PRIVATE_KEY_CONTENT
+    clients:
+# generate all OIDC clients using authelia_oidc_clients variable
+#{% for c in authelia_oidc_clients %}
+# ...
+#{% endfor %}
+
+storage:
+  # local: 
+  #   path: /config/db.sqlite3
+  postgres:
+    address: 'tcp://' # add the Postgres service hostname and port
+    database: {{ authelia_db }}
+    schema: public
+    username: {{ authelia_db_user }}
+    password: {{ authelia_db_password }}
+    timeout: 5s
+  encryption_key: "{{ lookup('password', '/dev/null', length=64) }}"
+
+notifier:
+  disable_startup_check: true
+  filesystem:
+    filename: /config/notification.txt
+
+# TODO[VCC-018]: Enable configuration to export metrics to Prometheus (Authelia)

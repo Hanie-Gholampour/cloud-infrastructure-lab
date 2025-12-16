@@ -1,0 +1,63 @@
+services:
+  db:
+    # TODO[VCC-012]: Configure docker compose for postgres
+    image: postgres:16
+    environment:
+    volumes:
+    networks:
+      net:
+
+  forgejo:
+    # TODO[VCC-013]: Configure docker compose for forgejo
+    image: "{{ registry_address }}/forgejo"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--spider", "http://localhost:{{ forgejo_port }}/"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
+    deploy:
+      replicas: 2
+    environment:
+    volumes:
+      - "{{ data_dir }}/forgejo:/data"
+      - "{{ data_dir }}/configs/forgejo/forgejo.ini:/conf/app.ini:ro"
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - "{{ data_dir }}/certs/wildcard.crt:/usr/local/share/ca-certificates/wildcard.crt:ro"
+    networks:
+      net:
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+    volumes:
+      - "{{ data_dir }}/redis:/data"
+    networks:
+      - net
+
+  authelia:
+    # TODO[VCC-014]: Configure docker compose for authelia
+    image: "{{ registry_address }}/authelia"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--spider", "http://localhost:{{ authelia_port }}/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    secrets:
+      - jwks_key
+    environment:
+    deploy:
+      replicas: 2
+    volumes:
+    networks:
+      net:
+
+secrets:
+  jwks_key:
+    file: "{{ data_dir }}/jwks/jwks.key"

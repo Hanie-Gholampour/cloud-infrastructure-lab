@@ -1,0 +1,97 @@
+---
+- name: Full deployment of stack
+  block:
+    - name: Undeploy stack
+      community.docker.docker_stack:
+        state: absent
+        name: vcc
+        detach: false
+      when: stack_recreate
+
+    - name: Delete directories in {{ data_dir}}
+      ansible.builtin.file:
+        path: "{{ data_dir}}/{{ item }}"
+        state: absent
+      loop: "{{ stack_data_directories + ['configs' if stack_nuke_config_directories else ''] }}"
+      when: stack_nuke_data_directories
+
+    - name: Create data directories in {{ data_dir }}
+      ansible.builtin.file:
+        path: "{{ data_dir }}/{{ item }}"
+        state: directory
+        owner: "{{ stack_dir_permissions[item].owner | default('root') }}"
+        group: "{{ stack_dir_permissions[item].group | default('root') }}"
+        mode:  "{{ stack_dir_permissions[item].mode  | default('0755') }}"
+      loop: "{{ stack_data_directories }}"
+  when: full | bool
+
+- name: Copy docker-compose files to remote host
+  ansible.builtin.template:
+    src: "{{ item }}"
+    dest: "/opt/{{ item }}"
+  loop: "{{ stack_file_names }}"
+
+# template files for services configuration
+
+- name: Create config directories in {{ data_dir }}/configs
+  ansible.builtin.file:
+    path: "{{ data_dir }}/configs/{{ item }}"
+    state: directory
+    mode: '0755'
+  loop: "{{ stack_config_directories }}"
+
+- name: Find template files in swarm config directories
+  local_action:
+    module: ansible.builtin.stat
+    path: "{{ role_path }}/templates/configs/{{ item }}"
+  loop: "{{ stack_config_directories }}"
+  register: cfg_templates_dir_stats
+
+- name: Build list of existing local template dirs
+  ansible.builtin.set_fact:
+    cfg_existing_dirs: "{{ cfg_templates_dir_stats.results | selectattr('stat.exists', 'defined') | selectattr('stat.exists') | map(attribute='item') | list }}"
+
+- name: Find template files in swarm config directories (only where present)
+  local_action:
+    module: ansible.builtin.find
+    paths: "{{ role_path }}/templates/configs/{{ item }}"
+    file_type: file
+    recurse: true
+  loop: "{{ cfg_existing_dirs }}"
+  register: template_files_raw
+  when: cfg_existing_dirs | length > 0
+
+- name: Flatten template file list
+  set_fact:
+    template_files: "{{ (template_files_raw.results | default([])) | map(attribute='files') | list | flatten }}"
+
+- name: Create directories for config templates
+  ansible.builtin.file:
+    path: "{{ data_dir }}/configs/{{ item.path | relpath(role_path ~ '/templates/configs') | dirname }}"
+    state: directory
+    mode: '0755'
+  loop: "{{ template_files | default([]) }}"
+  
+- name: Template configuration files
+  ansible.builtin.template:
+    src: "{{ item.path }}"
+    dest: "{{ data_dir }}/configs/{{ item.path | relpath(role_path ~ '/templates/configs') }}"
+  loop: "{{ template_files | default([]) }}"
+  loop_control:
+    label: "{{ item.path }}"
+
+# start services
+
+- name: Deploy stack from a compose file
+  community.docker.docker_stack:
+    state: present
+    name: vcc
+    prune: true
+    detach: false
+  #  with_registry_auth: true
+    compose: "{{ ['/opt/'] | product(stack_file_names) | map('join') | list }}" # this is evil
+  # retry the task that may fail
+  retries: 3
+  delay: 1
+  register: result
+  until: result is not failed

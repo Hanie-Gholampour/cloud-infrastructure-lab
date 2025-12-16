@@ -1,0 +1,30 @@
+
+- [ ] VCC-001: Implement the tasks for Docker installation
+- [ ] VCC-002: Implement tasks for NFS client setup. Make sure to use the storage network for NFS mount
+- [ ] VCC-003: Implement tasks for NFS server setup
+- [ ] VCC-004: Generate a jwks key for OIDC (RSA 4096 bits)
+- [ ] VCC-005: Add a new entrypoint for authelia and use it to replace the original
+- [ ] VCC-006: Create entrypoint for authelia. It should support replicated deployments
+- [ ] VCC-007: Add a new entrypoint for forgejo and use it to replace the original
+- [ ] VCC-008: Create entrypoint for forgejo. It should support replicated deployments
+- [ ] VCC-009: Add a new entrypoint for grafana and use it to replace the original
+- [ ] VCC-010: Create entrypoint for grafana. It should support replicated deployments
+- [ ] VCC-011: Configure Forgejo to use postgres
+- [ ] VCC-012: Configure docker compose for postgres
+- [ ] VCC-012b: Create the database and the user for Authelia
+- [ ] VCC-012c: Create the database and the user for Grafana
+- [ ] VCC-013: Configure docker compose for forgejo
+- [ ] VCC-014: Configure docker compose for authelia
+- [ ] VCC-015: Enable HTTP to HTTPS redirection
+- [ ] VCC-016a: Configure Grafana to use Authelia for authentication
+- [ ] VCC-016b: Add grafana OIDC client configuration
+- [ ] VCC-017: Update Authelia configuration (see comments below)
+- [ ] VCC-018: Enable configuration to export metrics to Prometheus (Authelia)
+- [ ] VCC-019: Configure Postgres exporter
+- [ ] VCC-020: Enable configuration to export metrics to Prometheus (Forgejo)
+- [ ] VCC-021: Configure Redis exporter
+- [ ] VCC-022: Configure Authelia exporter
+- [ ] VCC-023: Configure Forgejo exporter
+- [ ] VCC-024: Create meaningful Grafana dashboards (do NOT import ready-made dashboards)
+- [ ] VCC-025: Vault all cleartext secrets/passwords
+- [ ] VCC-026-FINAL: Verify all conditions before delivering the project
