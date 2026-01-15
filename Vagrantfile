@@ -9,7 +9,7 @@ CPU_COUNT=2
 CONTROL_RAM_SIZE=1024
 CONTROL_CPU_COUNT=1
 # if exists, upload this public key to the VMs (Windows path example)
-KEY_FILE_PATH = "C:\\users\\enriquez\\.ssh\\id_rsa.pub"
+KEY_FILE_PATH = "/home/hanie/.ssh/id_rsa.pub"
 # Set the network configuration (prefixes)
 WORKLOAD_NET = "192.168.255"
 STORAGE_NET  = "10.10.255"

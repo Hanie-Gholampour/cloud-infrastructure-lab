@@ -13,6 +13,39 @@
 
 # - name: Start NFS server
 
+
+# 1) Create NFS share directory
+- name: Create NFS share directory
+  ansible.builtin.file:
+    path: "{{ nfs_dir }}"
+    state: directory
+    mode: "0777"
+
+# 2) Install NFS server
+- name: Install NFS server packages
+  ansible.builtin.apt:
+    name:
+      - nfs-kernel-server
+    update_cache: yes
+  become: true
+
+# 3) Configure exports using template
+- name: Configure exports
+  ansible.builtin.template:
+    src: exports # Source template file
+    dest: /etc/exports # Destination on server
+  notify: Restart NFS server # Trigger handler if changed in exports 
+
+# 4) Start NFS server service
+- name: Start and enable NFS server
+  ansible.builtin.service:
+    name: nfs-kernel-server
+    state: started
+    enabled: yes
+
+
+
+
 ## check exports
 - block:
   - name: Apply notifiers

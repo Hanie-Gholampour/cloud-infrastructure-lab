@@ -3,6 +3,70 @@
 
 # TODO[VCC-001]: Implement the tasks for Docker installation
 
+- name: Install required packages for Docker repository
+  ansible.builtin.apt:
+    pkg:
+      - ca-certificates
+      - curl
+    state: present
+    update_cache: true
+  become: true
+
+- name: Filter required facts
+  ansible.builtin.setup:
+    filter:
+      - deb_architecture
+      - ansible_architecture
+      - ansible_distribution_release
+
+- name: Ensure apt keyrings directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+  become: true
+
+- name: Add Docker apt repository key
+  ansible.builtin.get_url:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    dest: /etc/apt/keyrings/docker.asc
+    mode: '0644'
+  become: true
+
+- name: Add Docker apt repository
+  ansible.builtin.apt_repository:
+    repo: >
+      deb [arch={{ deb_architecture[ansible_architecture] | default('amd64') }}
+      signed-by=/etc/apt/keyrings/docker.asc]
+      https://download.docker.com/linux/ubuntu
+      {{ ansible_distribution_release }} stable
+    state: present
+  become: true
+
+- name: Install Docker packages
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+    update_cache: true
+  become: true
+
+- name: Add vagrant user to docker group
+  ansible.builtin.user:
+    name: vagrant
+    groups: docker
+    append: true
+  become: true
+
+
+
+
+
+
+
 - name: Check if docker command exists
   ansible.builtin.shell: "command -v docker"
   register: docker_check

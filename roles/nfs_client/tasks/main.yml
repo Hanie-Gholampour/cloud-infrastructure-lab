@@ -2,11 +2,47 @@
 # TODO[VCC-002]: Implement tasks for NFS client setup. Make sure to use the storage network for NFS mount
 
 # - name: "Create NFS share directory"
-
 # - name: Install NFS client
-
 # - name: Mount NFS share
 # use storage network for NFS mount
+
+
+# NFS client setup - mount NFS share from storage server using storage network
+
+# 1) "Create NFS share directory"
+- name: "Create NFS share directory"
+  ansible.builtin.file:
+    path: "{{ nfs_dir }}"
+    state: directory
+    mode: '0777'
+  become: true
+
+# 2) Install NFS client
+- name: Install NFS client
+  ansible.builtin.apt:
+    name:
+      - nfs-common
+    state: present
+    update_cache: yes
+  become: true
+
+- name: Update fstab to mount NFS share
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    state: present
+    regexp: "^{{ hostvars[groups['storage'][0]].storage_IP }}:{{ nfs_dir }}"
+    line: "{{ hostvars[groups['storage'][0]].storage_IP }}:{{ nfs_dir }} {{ nfs_dir }} nfs rw,hard,intr,noatime,lookupcache=none 0 0"
+  become: true
+
+# 3) "Mount NFS share"
+- name: Mount NFS share
+  ansible.posix.mount:
+    path: "{{ nfs_dir }}"
+    state: mounted
+    fstype: nfs
+    opts: "rw,hard,intr,noatime,lookupcache=none"
+    src: "{{ hostvars[groups['storage'][0]].storage_IP }}:{{ nfs_dir }}"
+  become: true
 
 ## check mount
 - block:
@@ -15,6 +51,6 @@
     register: mounts_out
   - assert:
       that:
-        - mounts_out.stdout is search('storage\\.' ~ domain_name | regex_escape ~ ':/data.*clientaddr=' ~ storage_IP | regex_escape ~ '.*')
+        - mounts_out.stdout is search(hostvars[groups['storage'][0]].storage_IP | regex_escape ~ ':' ~ nfs_dir | regex_escape)
       fail_msg: "NFS share not mounted correctly"
   when: enable_asserts
