@@ -3,9 +3,26 @@ services:
     # TODO[VCC-012]: Configure docker compose for postgres
     image: postgres:16
     environment:
+      POSTGRES_USER: {{ db_user }}
+      POSTGRES_PASSWORD: {{ db_password }}
+      POSTGRES_DB: {{ db_name }}
     volumes:
+      - "{{ data_dir }}/pgdata:/var/lib/postgresql/data"
+      - "{{ data_dir }}/configs/pgsql:/docker-entrypoint-initdb.d:ro"
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: any
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ db_user }} -d {{ db_name }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       net:
+        aliases:
+          - postgres
+
 
   forgejo:
     # TODO[VCC-013]: Configure docker compose for forgejo
@@ -43,6 +60,10 @@ services:
   authelia:
     # TODO[VCC-014]: Configure docker compose for authelia
     image: "{{ registry_address }}/authelia"
+    hostname: authelia
+    depends_on:
+      - db
+      - redis
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--spider", "http://localhost:{{ authelia_port }}/api/health"]
       interval: 10s
@@ -52,11 +73,35 @@ services:
     secrets:
       - jwks_key
     environment:
+      # Note: address is set in config file as tcp://postgres:5432
+      # Only pass credentials via env vars (not host/port which are deprecated)
+      AUTHELIA_STORAGE_POSTGRES_DATABASE: {{ authelia_db }}
+      AUTHELIA_STORAGE_POSTGRES_USERNAME: {{ authelia_db_user }}
+      AUTHELIA_STORAGE_POSTGRES_PASSWORD: {{ authelia_db_password }}
     deploy:
       replicas: 2
+      restart_policy:
+        condition: any
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.authelia.rule=Host(`auth.{{ domain_name }}`)"
+        - "traefik.http.routers.authelia.entrypoints=websecure"
+        - "traefik.http.routers.authelia.tls=true"
+        - "traefik.http.services.authelia.loadbalancer.server.port={{ authelia_port }}"
     volumes:
+      - "{{ data_dir }}/configs/authelia:/config:ro"
+      - "{{ data_dir }}/certs/wildcard.crt:/usr/local/share/ca-certificates/wildcard.crt:ro"
+    extra_hosts:
+      - "auth.{{ domain_name }}:{{ keepalive_virtual_ip }}"
+      - "git.{{ domain_name }}:{{ keepalive_virtual_ip }}"
+      - "mon.{{ domain_name }}:{{ keepalive_virtual_ip }}"
     networks:
       net:
+        aliases:
+          - auth.{{ domain_name }}
+
+networks:
+  net:
 
 secrets:
   jwks_key:
