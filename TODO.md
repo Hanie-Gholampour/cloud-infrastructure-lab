@@ -5,15 +5,15 @@
 - [DONE] VCC-004: Generate a jwks key for OIDC (RSA 4096 bits)
 - [DONE] VCC-005: Add a new entrypoint for authelia and use it to replace the original
 - [DONE] VCC-006: Create entrypoint for authelia. It should support replicated deployments
-- [ ] VCC-007: Add a new entrypoint for forgejo and use it to replace the original
-- [ ] VCC-008: Create entrypoint for forgejo. It should support replicated deployments
+- [DONE] VCC-007: Add a new entrypoint for forgejo and use it to replace the original
+- [Done] VCC-008: Create entrypoint for forgejo. It should support replicated deployments
 - [ ] VCC-009: Add a new entrypoint for grafana and use it to replace the original
 - [ ] VCC-010: Create entrypoint for grafana. It should support replicated deployments
 - [ ] VCC-011: Configure Forgejo to use postgres
 - [DONE] VCC-012: Configure docker compose for postgres
 - [ ] VCC-012b: Create the database and the user for Authelia
 - [ ] VCC-012c: Create the database and the user for Grafana
-- [ ] VCC-013: Configure docker compose for forgejo
+- [DONE] VCC-013: Configure docker compose for forgejo
 - [DONE] VCC-014: Configure docker compose for authelia
 - [ ] VCC-015: Enable HTTP to HTTPS redirection
 - [ ] VCC-016a: Configure Grafana to use Authelia for authentication

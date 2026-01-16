@@ -1,4 +1,11 @@
-ARG VERSION=11.0.8
-FROM codeberg.org/forgejo/forgejo:${VERSION}
+ARG VERSION=4.39.14
+FROM authelia/authelia:${VERSION}
 
-# TODO[VCC-007]: Add a new entrypoint for forgejo and use it to replace the original
+# TODO[VCC-005]: Add a new entrypoint for authelia and use it to replace the original
+
+# Add authelia-entrypoint for authelia
+COPY entrypoint.sh /authelia-entrypoint.sh
+
+RUN chmod +x /authelia-entrypoint.sh
+
+ENTRYPOINT ["/authelia-entrypoint.sh"]
