@@ -32,21 +32,30 @@ identity_providers:
   oidc:
     jwks:
       - algorithm: RS256
-        # entrypoint will substitute the key content here taken from the secret file (/run/secrets/jwks_key)
-        # DO NOT EDIT THIS VALUE HERE
         key: |
           JWKS_PRIVATE_KEY_CONTENT
     clients:
-# generate all OIDC clients using authelia_oidc_clients variable
-#{% for c in authelia_oidc_clients %}
-# ...
-#{% endfor %}
+{% for c in authelia_oidc_clients %}
+      - client_id: '{{ c.id }}'
+        client_secret: '{{ c.secret }}'
+        token_endpoint_auth_method: '{{ c.token_endpoint_auth_method }}'
+        authorization_policy: '{{ c.authorization_policy }}'
+        public: {{ c.public | lower }}
+        redirect_uris:
+{% for uri in c.redirect_uris %}
+          - '{{ uri }}'
+{% endfor %}
+        scopes:
+{% for scope in c.scopes %}
+          - '{{ scope }}'
+{% endfor %}
+{% endfor %}
 
 storage:
   # local: 
   #   path: /config/db.sqlite3
   postgres:
-    address: 'tcp://' # add the Postgres service hostname and port
+    address: 'tcp://postgres:5432'
     database: {{ authelia_db }}
     schema: public
     username: {{ authelia_db_user }}
@@ -60,3 +69,14 @@ notifier:
     filename: /config/notification.txt
 
 # TODO[VCC-018]: Enable configuration to export metrics to Prometheus (Authelia)
+telemetry:
+  metrics:
+    enabled: true
+    address: "tcp://0.0.0.0:{{ authelia_port_metrics }}"
+    buffers:
+      read: 4096
+      write: 4096
+    timeouts:
+      read: 6s
+      write: 6s
+      idle: 30s
