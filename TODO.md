@@ -15,7 +15,7 @@
 - [DONE] VCC-012c: Create the database and the user for Grafana
 - [DONE] VCC-013: Configure docker compose for forgejo
 - [DONE] VCC-014: Configure docker compose for authelia
-- [ ] VCC-015: Enable HTTP to HTTPS redirection
+- [DONE] VCC-015: Enable HTTP to HTTPS redirection
 - [ ] VCC-016a: Configure Grafana to use Authelia for authentication
 - [ ] VCC-016b: Add grafana OIDC client configuration
 - [ ] VCC-017: Update Authelia configuration (see comments below)

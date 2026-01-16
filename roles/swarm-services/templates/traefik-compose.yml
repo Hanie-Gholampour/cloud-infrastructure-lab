@@ -18,7 +18,9 @@ services:
       - "--providers.file.filename=/etc/traefik/dynamic.yml"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
-      # redirect HTTP to HTTPS
+       # redirect HTTP to HTTPS
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
       # TODO[VCC-015]: Enable HTTP to HTTPS redirection
       # logging configuration
       - "--log.level=INFO"
