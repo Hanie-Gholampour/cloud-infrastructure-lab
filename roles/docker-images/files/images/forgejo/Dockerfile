@@ -1,11 +1,15 @@
-ARG VERSION=4.39.14
-FROM authelia/authelia:${VERSION}
+ARG VERSION=11.0.8
+FROM codeberg.org/forgejo/forgejo:${VERSION}
 
-# TODO[VCC-005]: Add a new entrypoint for authelia and use it to replace the original
+# TODO[VCC-007]: Add a new entrypoint for forgejo and use it to replace the original
 
-# Add authelia-entrypoint for authelia
-COPY entrypoint.sh /authelia-entrypoint.sh
+#Install postgresql-client for database connectivity check
+# Forgejo is Alpine-based, so we use apk
+USER root
+RUN apk add --no-cache postgresql-client curl
 
-RUN chmod +x /authelia-entrypoint.sh
+# Add forgejo-entrypoint for forgejo
+COPY entrypoint.sh /forgejo-entrypoint.sh
+RUN chmod +x /forgejo-entrypoint.sh
 
-ENTRYPOINT ["/authelia-entrypoint.sh"]
+ENTRYPOINT ["/forgejo-entrypoint.sh"]

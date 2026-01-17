@@ -1,119 +1,152 @@
 #!/bin/sh
 set -eu # fail on error
 
-CONFIG_SRC="/config/configuration.yml"
-CONFIG="/tmp/configuration.yml"
-SECRET_FILE="/run/secrets/jwks_key"
+# Make forgejo trust our TLS certificate
+update-ca-certificates 2>/dev/null || true
 
-# TODO[VCC-006]: Create entrypoint for authelia. It should support replicated deployments
+# TODO[VCC-008]: Create entrypoint for forgejo. It should support replicated deployments
+# Configuration
+LOCK_FILE="/data/gitea/.forgejo_configured"
+DB_HOST="${FORGEJO_DB_HOST:-postgres}"
+DB_PORT="${FORGEJO_DB_PORT:-5432}"
+DB_NAME="${FORGEJO_DB_NAME:-forgejo}"
+DB_USER="${FORGEJO_DB_USER:-forgejo}"
+DB_PASS="${FORGEJO_DB_PASS:-forgejo}"
+ADMIN_USER="${FORGEJO_ADMIN_USER:-admin}"
+ADMIN_PASS="${FORGEJO_ADMIN_PASS:-admin}"
+ADMIN_EMAIL="${FORGEJO_ADMIN_EMAIL:-admin@vcc.local}"
+AUTH_URL="${FORGEJO_AUTH_URL:-https://auth.vcc.local}"
+DOMAIN_NAME="${DOMAIN_NAME:-vcc.local}"
 
-# Authelia database connection settings
-DB_HOST="postgres"
-DB_PORT="5432"
-DB_NAME="${AUTHELIA_STORAGE_POSTGRES_DATABASE:-autheliadb}"
-DB_USER="${AUTHELIA_STORAGE_POSTGRES_USERNAME:-authelia}"
-DB_PASS="${AUTHELIA_STORAGE_POSTGRES_PASSWORD:-}"
 
-echo "Authelia database config: $DB_USER@$DB_HOST:$DB_PORT/$DB_NAME"
+# This helper allows to run stuff as the forgejo user
+# Looks like it's missing the `sudo` executable
+forgejo_cli() { su -c "forgejo --config /data/gitea/conf/app.ini $*" git; }
 
 
 
-# wait until database is alive
-# Authelia image comes with netcat (nc) installed and apt is not available
-# Check if Authelia has been configured before
-echo "Waiting for database at $DB_HOST:$DB_PORT..."
-MAX_RETRIES=60
-RETRY=0
-while ! nc -w 1 "$DB_HOST" "$DB_PORT" </dev/null 2>/dev/null; do
-    RETRY=$((RETRY + 1))
-    if [ "$RETRY" -ge "$MAX_RETRIES" ]; then
-        echo "Database connection timeout after $MAX_RETRIES attempts"
-        exit 1
+
+# Wait until database is alive
+#  - port alive                         (bad)
+#  - a mock query like 'SELECT 1' works (better)
+
+# Wait until database is alive using a mock query
+echo "Waiting for database at $DB_HOST:$DB_PORT (database: $DB_NAME, user: $DB_USER)..."
+
+
+# First, wait for TCP connectivity (network layer)
+echo "Checking TCP connectivity to $DB_HOST:$DB_PORT..."
+MAX_TCP_RETRIES=30
+TCP_RETRY_COUNT=0
+while ! nc -zw5 "$DB_HOST" "$DB_PORT" 2>/dev/null; do
+    TCP_RETRY_COUNT=$((TCP_RETRY_COUNT + 1))
+    if [ $TCP_RETRY_COUNT -ge $MAX_TCP_RETRIES ]; then
+        echo "ERROR: Cannot establish TCP connection to $DB_HOST:$DB_PORT after $MAX_TCP_RETRIES attempts"
+        echo "Attempting to resolve hostname: $DB_HOST"
+        getent hosts "$DB_HOST" || echo "Cannot resolve $DB_HOST"
+        echo "Network may not be ready. Continuing to retry..."
     fi
-    echo "Database not ready, waiting... (attempt $RETRY/$MAX_RETRIES)"
+    echo "TCP connection not ready (attempt $TCP_RETRY_COUNT), waiting..."
     sleep 2
 done
-echo "Database port is open!"
+echo "TCP connectivity established!"
 
-
-# Additional wait for PostgreSQL to fully initialize
-echo "Waiting additional 5s for PostgreSQL to be fully ready..."
-sleep 5
-
-# Copy config to writable location
-cp "$CONFIG_SRC" "$CONFIG"
-
-# Inject jwks key from secrets
-echo "Injecting jwks key from secrets"
-# Use awk to properly handle multiline key replacement with correct indentation
-awk -v keyfile="$SECRET_FILE" '
-/JWKS_PRIVATE_KEY_CONTENT/ {
-    while ((getline line < keyfile) > 0) {
-        print "          " line
-    }
-    next
-}
-{print}
-' "$CONFIG" > "${CONFIG}.tmp" && mv "${CONFIG}.tmp" "$CONFIG"
-
-
-
-
-
-
-# Check if Authelia database schema needs migration
-# Add random delay (0-15 seconds) to reduce race conditions between replicas
-DELAY=$(($(od -An -N1 -tu1 /dev/urandom) % 16))
-echo "Waiting ${DELAY}s before checking migration status (anti-collision delay)..."
-sleep "$DELAY"
-
-echo "Checking database schema..."
-MIGRATE_STATUS=$(authelia storage migrate status -c "$CONFIG" 2>&1 || true)
-
-if echo "$MIGRATE_STATUS" | grep -qi "up-to-date"; then
-    echo "Database schema already up-to-date, skipping migration..."
-elif echo "$MIGRATE_STATUS" | grep -qi "Storage schema is on version"; then
-    echo "Database schema exists, skipping migration..."
-else
-    echo "Initialize Authelia database schema"
-    # Try migration, capture output to check for "already up to date" message
-    MIGRATE_OUTPUT=$(authelia storage migrate up -c "$CONFIG" 2>&1) || MIGRATE_EXIT=$?
-    MIGRATE_EXIT=${MIGRATE_EXIT:-0}
-    
-    if [ "$MIGRATE_EXIT" -eq 0 ]; then
-        echo "Migration completed successfully"
-    elif echo "$MIGRATE_OUTPUT" | grep -qi "already up to date"; then
-        # "schema already up to date" is not an error - another replica did it
-        echo "Schema already up to date (migrated by another replica), continuing..."
-    elif echo "$MIGRATE_OUTPUT" | grep -qi "rollback\|duplicate key"; then
-        # Migration rollback or duplicate key means another replica is migrating
-        echo "Migration conflict detected (another replica is migrating), waiting..."
-        sleep 10
-        # Check if schema now exists after waiting
-        if authelia storage migrate status -c "$CONFIG" 2>&1 | grep -qiE "up-to-date|version"; then
-            echo "Schema now exists (migrated by another replica), continuing..."
-        else
-            echo "Migration conflict but schema still not ready, retrying once..."
-            authelia storage migrate up -c "$CONFIG" 2>&1 || true
-        fi
-    else
-        echo "Migration returned exit code $MIGRATE_EXIT, checking if schema now exists..."
-        echo "Migration output: $MIGRATE_OUTPUT"
-        sleep 5
-        if authelia storage migrate status -c "$CONFIG" 2>&1 | grep -qiE "up-to-date|version"; then
-            echo "Schema exists (likely migrated by another replica), continuing..."
-        else
-            echo "Migration truly failed!"
-            exit 1
-        fi
+# Now wait for PostgreSQL to be ready and accepting queries
+echo "Waiting for PostgreSQL to accept connections..."
+MAX_RETRIES=60
+RETRY_COUNT=0
+while ! PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1" >/dev/null 2>&1; do
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+        echo "WARNING: Database not accepting queries after $MAX_RETRIES attempts"
+        echo "Last psql error:"
+        PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1" 2>&1 || true
+        echo "Continuing to retry..."
     fi
+    # Show actual error every 10 attempts for debugging
+    if [ $((RETRY_COUNT % 10)) -eq 0 ]; then
+        echo "Database not ready (attempt $RETRY_COUNT/$MAX_RETRIES), last error:"
+        PGPASSWORD="$DB_PASS" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1" 2>&1 || true
+    else
+        echo "Database not ready (attempt $RETRY_COUNT/$MAX_RETRIES), waiting..."
+    fi
+    sleep 3
+done
+echo "Database is ready!"
+
+# Check if it's the first run (see if lock file exists)
+if [ -f "$LOCK_FILE" ]; then
+    echo "Forgejo already configured, skipping initialization..."
+    exec /usr/bin/entrypoint "$@"
 fi
 
 
+# Check if it's the first run (see if /data/gitea/conf/app.ini exists)
+echo "First run detected"
+mkdir -p /data/gitea
+mkdir -p /data/queues
+mkdir -p /data/gitea/conf
+cp /conf/app.ini /data/gitea/conf/app.ini
+# Fix permission for data directory
+chown -R git:git /data/gitea
+chown -R git:git /data/queues
+
+# DB migration
+echo "Initialize forgejo database"
+forgejo_cli migrate
+
+# Create admin user (if it does not exists already)
+# use `forgejo_cli admin user list` and `forgejo_cli admin user create`
+echo "Checking admin user..."
+if ! forgejo_cli admin user list | grep -q "$ADMIN_USER"; then
+    echo "Creating admin user: $ADMIN_USER"
+    forgejo_cli admin user create \
+        --username "$ADMIN_USER" \
+        --password "$ADMIN_PASS" \
+        --email "$ADMIN_EMAIL" \
+        --admin
+else
+    echo "Admin user already exists"
+fi
+
+
+# Wait until authentication server is alive
+#  - port alive                         (bad)
+#  - check that the web server responds (better)
+#    Authelia exposes /api/health to check status
+#    For example: curl -kfsS https://auth.vcc.local/api/health returns {"status":"OK"}
+AUTHELIA_INTERNAL_URL="http://authelia:9091"
+echo "Waiting for authentication server (internal: $AUTHELIA_INTERNAL_URL)..."
+while ! curl -fsS "$AUTHELIA_INTERNAL_URL/api/health" 2>/dev/null | grep -q '"status":"OK"'; do
+    echo "Auth server not ready, waiting..."
+    sleep 2
+done
+echo "Auth server is ready!"
 
 
 
-echo "Authelia initialization complete"
+
+# Setup authentication (if it does not exist)
+# use `forgejo_cli admin auth list` and `forgejo_cli admin auth add-oauth`
+#   --auto-discover-url is `https://auth.{{domain_name}}/.well-known/openid-configuration`
+#   --provider is openidConnect
+
+echo "Checking OAuth authentication..."
+if ! forgejo_cli admin auth list | grep -q "authelia"; then
+    echo "Setting up OAuth authentication with Authelia"
+    forgejo_cli admin auth add-oauth \
+        --name "authelia" \
+        --provider "openidConnect" \
+        --auto-discover-url "https://auth.${DOMAIN_NAME}/.well-known/openid-configuration" \
+        --key "forgejo" \
+        --secret "${FORGEJO_OAUTH_SECRET:-forgejo-secret}"
+else
+    echo "OAuth authentication already configured"
+fi
+
+# Mark Forgejo as configured
+touch "$LOCK_FILE"
+echo "Forgejo initialization complete"
 
 # Execute the original entrypoint
-exec authelia --config "$CONFIG" "$@"
+exec /usr/bin/entrypoint "$@"
