@@ -78,9 +78,37 @@ prometheus.scrape "cadvisor_scraper" {
 
 // pgsql (https://grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.exporter.postgres/)
 // TODO[VCC-019]: Configure Postgres exporter
+prometheus.exporter.postgres "postgres_metrics" {
+  // Use Ansible template variables so Alloy has connection info at render time
+  data_source_names = ["postgresql://{{ authelia_db_user }}:{{ authelia_db_password }}@postgres:5432/{{ authelia_db }}?sslmode=disable"]
+}
+prometheus.scrape "postgres_scraper" {
+  targets    = prometheus.exporter.postgres.postgres_metrics.targets
+  job_name   = "postgres_exporter"
+
+  scrape_interval = "{{ alloy_scrape_interval }}"
+  scrape_timeout  = "{{ alloy_scrape_timeout }}"
+
+  forward_to = [prometheus.relabel.metrics.receiver]
+}
+
 
 // redis (https://grafana.com/docs/alloy/latest/reference/components/prometheus/prometheus.exporter.redis/)
 // TODO[VCC-021]: Configure Redis exporter
+prometheus.exporter.redis "redis_metrics" {
+  redis_addr = "redis:6379"
+}
+
+prometheus.scrape "redis_scraper" {
+  targets    = prometheus.exporter.redis.redis_metrics.targets
+  job_name   = "redis_exporter"
+
+  scrape_interval = "{{ alloy_scrape_interval }}"
+  scrape_timeout  = "{{ alloy_scrape_timeout }}"
+
+  forward_to = [prometheus.relabel.metrics.receiver]
+}
+
 
 // traefik
 
@@ -147,9 +175,89 @@ prometheus.relabel "traefik_instance" {
 
 // authelia exporter
 // TODO[VCC-022]: Configure Authelia exporter
+discovery.relabel "authelia_targets" {
+  targets = discovery.docker.discovery_docker.targets
+
+  // keep only authelia service
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_swarm_service_name"]
+    regex         = "vcc_authelia"
+    action        = "keep"
+  }
+
+  // set __address__ to container ip:metrics port
+  rule {
+    source_labels = ["__meta_docker_network_ip"]
+    target_label  = "__address__"
+    replacement   = "$1:{{ authelia_port_metrics }}"
+    action        = "replace"
+  }
+
+  rule {
+    target_label  = "__scheme__"
+    replacement   = "http"
+    action        = "replace"
+  }
+}
+
+prometheus.scrape "authelia_metrics" {
+  targets  = discovery.relabel.authelia_targets.output
+  job_name = "authelia_exporter"
+
+  scrape_interval = "{{ alloy_scrape_interval }}"
+  scrape_timeout  = "{{ alloy_scrape_timeout }}"
+
+  forward_to = [prometheus.relabel.metrics.receiver]
+}
+
+
 
 // forgejo exporter
 // TODO[VCC-023]: Configure Forgejo exporter
+discovery.relabel "forgejo_targets" {
+  targets = discovery.docker.discovery_docker.targets
+
+  // keep only forgejo service
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_swarm_service_name"]
+    regex         = "vcc_forgejo"
+    action        = "keep"
+  }
+
+  // set __address__ to container ip:forgejo port
+  rule {
+    source_labels = ["__meta_docker_network_ip"]
+    target_label  = "__address__"
+    replacement   = "$1:{{ forgejo_port }}"
+    action        = "replace"
+  }
+
+  rule {
+    target_label  = "__scheme__"
+    replacement   = "http"
+    action        = "replace"
+  }
+
+  rule {
+    target_label  = "__metrics_path__"
+    replacement   = "/metrics"
+    action        = "replace"
+  }
+}
+
+
+
+prometheus.scrape "forgejo_metrics" {
+  targets  = discovery.relabel.forgejo_targets.output
+  job_name = "forgejo_exporter"
+
+  scrape_interval = "{{ alloy_scrape_interval }}"
+  scrape_timeout  = "{{ alloy_scrape_timeout }}"
+
+  forward_to = [prometheus.relabel.metrics.receiver]
+}
+
+
 
 // Define a relabeling rule to add the node name as a label
 prometheus.relabel "metrics" {

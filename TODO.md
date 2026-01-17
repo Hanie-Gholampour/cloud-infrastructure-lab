@@ -19,12 +19,12 @@
 - [DONE] VCC-016a: Configure Grafana to use Authelia for authentication
 - [DONE] VCC-016b: Add grafana OIDC client configuration
 - [DONE] VCC-017: Update Authelia configuration (see comments below)
-- [ ] VCC-018: Enable configuration to export metrics to Prometheus (Authelia)
-- [ ] VCC-019: Configure Postgres exporter
-- [ ] VCC-020: Enable configuration to export metrics to Prometheus (Forgejo)
-- [ ] VCC-021: Configure Redis exporter
-- [ ] VCC-022: Configure Authelia exporter
-- [ ] VCC-023: Configure Forgejo exporter
+- [DONE] VCC-018: Enable configuration to export metrics to Prometheus (Authelia)
+- [DONE] VCC-019: Configure Postgres exporter
+- [DONE] VCC-020: Enable configuration to export metrics to Prometheus (Forgejo)
+- [DONE] VCC-021: Configure Redis exporter
+- [DONE] VCC-022: Configure Authelia exporter
+- [DONE] VCC-023: Configure Forgejo exporter
 - [ ] VCC-024: Create meaningful Grafana dashboards (do NOT import ready-made dashboards)
 - [ ] VCC-025: Vault all cleartext secrets/passwords
 - [ ] VCC-026-FINAL: Verify all conditions before delivering the project
