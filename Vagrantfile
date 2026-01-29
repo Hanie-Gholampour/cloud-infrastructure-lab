@@ -33,10 +33,10 @@ Vagrant.configure("2") do |config|
   case provider
   when 'vmware_desktop'
     config.vm.provider "vmware_desktop" do |vmw|
-      vmw.gui = true
-      vmw.memory = RAM_SIZE
-      vmw.cpus = CPU_COUNT
-    end
+    vmw.gui = true
+    vmw.vmx["memsize"]   = RAM_SIZE.to_s
+    vmw.vmx["numvcpus"]  = CPU_COUNT.to_s
+  end
 
   when 'virtualbox'
     config.vm.provider "virtualbox" do |vb|
