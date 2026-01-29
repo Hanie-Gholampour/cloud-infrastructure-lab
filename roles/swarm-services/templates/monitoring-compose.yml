@@ -36,7 +36,7 @@ services:
       GF_DATABASE_USER: "{{ grafana_db_user }}"
       GF_DATABASE_PASSWORD: "{{ grafana_db_password }}"
       # TODO[VCC-016a]: Configure Grafana to use Authelia for authentication
-       # Grafana OAuth with Authelia
+      # Grafana OAuth with Authelia
       GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
       GF_AUTH_GENERIC_OAUTH_NAME: "Authelia"
       GF_AUTH_GENERIC_OAUTH_CLIENT_ID: "{{ grafana_oidc_client_id }}"
@@ -50,6 +50,9 @@ services:
       GF_AUTH_SIGNOUT_REDIRECT_URL: "{{ authelia_url }}/logout"
       GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(groups[*], 'admins') && 'Admin' || 'Editor'"
       GF_AUTH_GENERIC_OAUTH_ALLOW_ASSIGN_GRAFANA_ADMIN: "true"
+
+
+
       # see https://grafana.com/docs/grafana/latest/setup-grafana/configure-access/configure-authentication/generic-oauth/
     volumes:
       # to mount this volume it is necessary to give grafana user write permissions on the host folder
@@ -62,15 +65,26 @@ services:
       #   Requirements:
       #     1) Create 2–3 thematic dashboards.
       #        Suggested themes: service health, node/host metrics, troubleshooting/correlation.
+
       #     2) Select the metrics yourselves (Traefik, Forgejo, Authelia, Postgres, etc.)
       #        and be ready to explain *why* each panel is useful.
+
       #     3) Demonstrate at least one correlation workflow:
       #           - A metric spike panel (e.g., errors, latency)
       #           - A log panel below that automatically follows the time window.
+
       #     4) Export the dashboards and configure Grafana provisioning
       #        so they load automatically at startup.
+      
+      
+      - "{{ data_dir }}/configs/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro"
+
       # required for SSO to work
       - "{{ data_dir }}/certs/wildcard.crt:/usr/local/share/ca-certificates/wildcard.crt:ro"
+    extra_hosts:
+      - "auth.{{ domain_name }}:{{ keepalive_virtual_ip }}"
+      - "git.{{ domain_name }}:{{ keepalive_virtual_ip }}"
+      - "mon.{{ domain_name }}:{{ keepalive_virtual_ip }}"
     networks:
       net:
 

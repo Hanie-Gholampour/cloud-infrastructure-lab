@@ -126,12 +126,31 @@ production_mode: false
 
 # postgres
 db_user: forgejo
-db_password: forgejo_pass
 db_name: forgejo
+
+db_password: "{{ vaulted_db_password if production_mode else 'forgejo_pass' }}"
+vaulted_db_password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          66616334326365646330306330333336303439356461343431313031666132303131393265613939
+          6631326164386263613832623233613764623433396564300a333535623639646330623231663037
+          63646139353661646566393330313935623437396432393438646334666634336338626339656637
+          3237643566383535390a343139303862616133373135333562303931353037386231333139353034
+          6338
+
 
 # authelia
 authelia_db_user: authelia
-authelia_db_password: authelia_pass
+
+authelia_db_password: "{{ vaulted_authelia_db_password if production_mode else 'authelia_pass' }}"
+vaulted_authelia_db_password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          62396535313663633963326338393062376330656534343130303239346238323938643531626138
+          6133656239643533396538383133623261386433303239380a353665373165383932336663626562
+          38636163386535373536306562306634313637346234643261303961353362376361343665666363
+          3030656461306435360a306163363564613761663638313436343538303432323565306538646136
+          3030
+
+
 authelia_db: autheliadb
 authelia_url: "https://auth.{{ domain_name }}"
 authelia_port: 9091
@@ -154,7 +173,7 @@ authelia_oidc_clients:
       - "email"
       - "groups"
   # grafana client
-    # TODO [VCC-016b]: Add grafana OIDC client configuration
+  # TODO [VCC-016b]: Add grafana OIDC client configuration
   - id: "{{ grafana_oidc_client_id }}"
     secret: "{{ grafana_oidc_client_secret }}"
     token_endpoint_auth_method: "client_secret_post"
@@ -171,10 +190,20 @@ authelia_oidc_clients:
 # forgejo
 # admin and root are reserved names
 forgejo_admin_username: siteadmin
-forgejo_admin_password: admin
+
+forgejo_admin_password: "{{ vaulted_forgejo_admin_password if production_mode else 'admin' }}"
+vaulted_forgejo_admin_password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          30386438383233623763316437643435663536343266323834333061616666346231633136613435
+          6330346130633830363262613363336331646237636265660a613336376462303936623431366462
+          37313539363537613037613466613265366431303963343233376466383164356539343862666431
+          3530643931626439310a636132366532323835336266616263393265383838316231613239343732
+          3463
+          
 forgejo_admin_email: admin@{{ domain_name }}
 forgejo_oidc_url: "{{ authelia_url }}"
 forgejo_oidc_client_id: forgejo
+
 forgejo_oidc_client_secret: "{{ vaulted_forgejo_oidc_client_secret if production_mode else 'forgejo_secret' }}"
 vaulted_forgejo_oidc_client_secret: !vault |
           $ANSIBLE_VAULT;1.1;AES256
@@ -187,9 +216,24 @@ forgejo_port: 3200
 
 # grafana
 grafana_admin_user: admin
-grafana_admin_password: admin
+
+grafana_admin_password: "{{ vaulted_grafana_admin_password if production_mode else 'admin' }}"
+vaulted_grafana_admin_password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          62333662313364313164306566383338373465343238346233353338363064336263343133346238
+          3235383461396634633633356237323837303738633464330a643966383166373731376133366539
+          65643965326231653633656238383835363538306361343735303761336563393564383636333433
+          6361623231373562360a626266386361343434333633393134646634386234633137663836353933
+          6563
 grafana_db_user: grafana
-grafana_db_password: grafana_pass
+grafana_db_password: "{{ vaulted_grafana_db_password if production_mode else 'grafana_pass' }}"
+vaulted_grafana_db_password: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          32633866656663393737623634373030356134376637656638323134653135653336363564373664
+          6466646532616537633634666364623862343734303036340a623363306265336162346461383933
+          32356232626432643331386437643734326539333162353631333135666232356137393335356435
+          6463373661626338320a646539343931633964643739626362346331373331626537316337633934
+          3135
 grafana_db: grafanadb
 grafana_oidc_client_id: grafana
 grafana_oidc_client_secret: "{{ vaulted_grafana_oidc_client_secret if production_mode else 'grafana_secret' }}"
@@ -209,16 +253,16 @@ alloy_port: 9000
 alloy_scrape_interval: 15s
 alloy_scrape_timeout: 10s
 
-# TODO[VCC-025]: Vault all cleartext secrets/passwords
+# TODO[VCC-025]: Vault all cleartext secrets/passwords 
 # See above the vaulted solution example for keepalive_auth_pass.
 # use: source /home/vagrant/.venv/bin/activate to activate the ansible virtualenv
 # then: ansible-vault encrypt_string 'supersecret' --name 'variable_name'
 # The agreed password is specified in the project slides
 # (use 'deactivate' to exit the virtualenv)
 
-# TODO[VCC-026-FINAL]: Verify all conditions before delivering the project
-#   1) Forgejo, Authelia, and Grafana must support multiple replicas and work correctly during scale up/down
-#   2) No ports should be exposed except those managed by Traefik
-#   3) No secrets or passwords must be left in plain text in the repository
-#   4) No named Docker volumes should exist (if they do, something is likely wrong)
-#   5) All group members must be able to explain and modify the project during the oral discussion
+# TODO[VCC-026-FINAL]: Verify all conditions before delivering the project 
+#   1) Forgejo, Authelia, and Grafana must support multiple replicas and work correctly during scale up/down 
+#   2) No ports should be exposed except those managed by Traefik 
+#   3) No secrets or passwords must be left in plain text in the repository 
+#   4) No named Docker volumes should exist (if they do, something is likely wrong) 
+#   5) All group members must be able to explain and modify the project during the oral discussion 
