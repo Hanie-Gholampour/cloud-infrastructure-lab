@@ -17,7 +17,7 @@
 # 1) Create NFS share directory
 - name: Create NFS share directory
   ansible.builtin.file:
-    path: "{{ nfs_dir }}"
+    path: "{{ data_dir }}"
     state: directory
     mode: "0777"
 

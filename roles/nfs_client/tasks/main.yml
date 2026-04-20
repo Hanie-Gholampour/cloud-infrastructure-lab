@@ -12,7 +12,7 @@
 # 1) "Create NFS share directory"
 - name: "Create NFS share directory"
   ansible.builtin.file:
-    path: "{{ nfs_dir }}"
+    path: "{{ data_dir }}"
     state: directory
     mode: '0777'
   become: true
@@ -37,7 +37,7 @@
 # 3) "Mount NFS share"
 - name: Mount NFS share
   ansible.posix.mount:
-    path: "{{ nfs_dir }}"
+    path: "{{ data_dir }}"
     state: mounted
     fstype: nfs
     opts: "rw,hard,intr,noatime,lookupcache=none"
